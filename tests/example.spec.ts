@@ -17,11 +17,12 @@ const messagesOf = (page: Page, label: string) =>
   fieldByLabel(page, label).locator('.q-field__messages').last();
 
 // Prefer accessible locators Quasar renders via <label for=...>
-const nameInput   = (page: Page) => page.getByLabel('Your name');
-const ageInput    = (page: Page) => page.getByLabel('Your age');
+const nameInput   = (page: Page) => page.getByLabel('Name');
+const emailInput  = (page: Page) => page.getByLabel('Email');
+const genderInput = (page: Page) => page.getByLabel('Gender');
 const submitBtn   = (page: Page) => page.getByRole('button', { name: /submit/i });
 const resetBtn    = (page: Page) => page.getByRole('button', { name: /reset|clear/i });
-const termsSwitch = (page: Page) => page.getByRole('switch', { name: /i accept/i });
+const termsSwitch = (page: Page) => page.getByLabel('I accept the terms');
 
 /** ---------- Assertion helpers ---------- **/
 const expectNoErrorMessages = async (page: Page) => {
@@ -43,38 +44,26 @@ test.describe('Quasar Form Input Validation', () => {
     await gotoApp(page);
   });
 
-  test('should validate name input', async ({ page }) => {
-    await submitBtn(page).click(); // empty submit -> first invalid is name
-    await expect(messagesOf(page, 'Your name')).toContainText(NAME_EMPTY_REGEX);
-
-    await nameInput(page).fill('John Doe');
-
-    // Re-submit to progress validation and ensure name no longer shows an *error*.
+  test('should validate name and email inputs', async ({ page }) => {
+    // Submit empty form -> should not pass
     await submitBtn(page).click();
 
-    // Your UI keeps a neutral helper ("Name and surname"), so just ensure no error-like text.
-    await expect(messagesOf(page, 'Your name')).not.toContainText(/please|invalid|error/i);
+    // The page shows form-level feedback via alerts in our simple app; check that form still visible
+    await expect(page.locator('form')).toBeVisible();
+
+    await nameInput(page).fill('John Doe');
+    await emailInput(page).fill('john@example.com');
+
+    // Re-submit and ensure no error-like messages exist
+    await submitBtn(page).click();
+    await expectNoErrorMessages(page);
   });
 
-  test('should validate age input', async ({ page }) => {
-    // Make name valid first so validation proceeds to age
+  test('should handle terms acceptance and reset', async ({ page }) => {
     await nameInput(page).fill('John Doe');
+    await emailInput(page).fill('john@example.com');
 
-    await submitBtn(page).click(); // now age is first invalid
-    await expect(messagesOf(page, 'Your age')).toContainText(AGE_EMPTY_REGEX);
-
-    // Negative age -> show a different message (support your variants)
-    await ageInput(page).fill('-1');
-    await submitBtn(page).click();
-    await expect(messagesOf(page, 'Your age')).toContainText(AGE_NEG_REGEX);
-  });
-
-  test('should handle terms acceptance', async ({ page }) => {
-    await nameInput(page).fill('John Doe');
-    await ageInput(page).fill('25');
-
-    // Submit with terms OFF
-    await submitBtn(page).click();
+    // Terms switch should be unchecked initially
     await expect(termsSwitch(page)).toHaveAttribute('aria-checked', 'false');
 
     // Turn it ON and submit again
@@ -82,22 +71,10 @@ test.describe('Quasar Form Input Validation', () => {
     await expect(termsSwitch(page)).toHaveAttribute('aria-checked', 'true');
     await submitBtn(page).click();
 
-    // Instead of a success banner, assert that no error-like messages remain
-    await expectNoErrorMessages(page);
-  });
-
-  test('should reset form inputs', async ({ page }) => {
-    await nameInput(page).fill('John Doe');
-    await ageInput(page).fill('25');
-
-    // Toggle terms ON via accessible switch (native input is hidden)
-    await termsSwitch(page).click();
-    await expect(termsSwitch(page)).toHaveAttribute('aria-checked', 'true');
-
+    // Reset should clear values
     await resetBtn(page).click();
-
     await expect(nameInput(page)).toHaveValue('');
-    await expect(ageInput(page)).toHaveValue('');
+    await expect(emailInput(page)).toHaveValue('');
     await expect(termsSwitch(page)).toHaveAttribute('aria-checked', 'false');
   });
 });
