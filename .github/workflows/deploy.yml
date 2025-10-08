@@ -1,0 +1,71 @@
+name: Deploy Quasar SPA to GitHub Pages
+on:
+  push:
+    branches: [ "master", "testing", "cicd" ] # Trigger deploy on three branches
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Allow pushing to gh-pages
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # ใช้ Node.js เวอร์ชัน 18 หรือสูงกว่า
+          cache: 'npm'
+
+      - name: Install dependencies
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: |
+          echo "Installing dependencies (npm install) - Playwright browser download skipped"
+          npm install --no-audit --no-fund
+
+      - name: Build Quasar SPA
+        run: npx quasar build
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}  # 🔒 Reference the secret
+          publish_dir: dist/spa
+          publish_branch: gh-pages
+          allow_empty_commit: false
+
+      - name: Write Pages URL to job summary
+        run: |
+          REPO="${{github.repository}}"
+          OWNER=$(echo "$REPO" | cut -d'/' -f1)
+          NAME=$(echo "$REPO" | cut -d'/' -f2)
+          PAGES_URL="https://${OWNER}.github.io/${NAME}"
+          echo "### GitHub Pages URL" >> $GITHUB_STEP_SUMMARY
+          echo "Site: $PAGES_URL" >> $GITHUB_STEP_SUMMARY
+
+      - name: Check Pages availability (retry)
+        run: |
+          REPO="${{github.repository}}"
+          OWNER=$(echo "$REPO" | cut -d'/' -f1)
+          NAME=$(echo "$REPO" | cut -d'/' -f2)
+          PAGES_URL="https://${OWNER}.github.io/${NAME}"
+          echo "Checking $PAGES_URL ..."
+          if ! command -v curl >/dev/null 2>&1; then
+            echo "curl not available on runner; skipping live check."; exit 0
+          fi
+          ATTEMPTS=5
+          SLEEP=6
+          for i in $(seq 1 $ATTEMPTS); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$PAGES_URL" || echo "000")
+            echo "Attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "Site reachable."; exit 0
+            fi
+            sleep $SLEEP
+          done
+          echo "Site not reachable after $ATTEMPTS attempts. Failing workflow."; exit 1
