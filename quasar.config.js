@@ -37,6 +37,9 @@ export default defineConfig((/* ctx */) => {
         node: 'node20',
       },
 
+      // Set publicPath for GitHub Pages deployment
+      publicPath: '/id-name-lastname/',
+
       vueRouterMode: 'hash', // available values: 'hash', 'history'
       // vueRouterBase,
       // vueDevtools,
